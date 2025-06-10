@@ -1,16 +1,15 @@
-import { TextBlock } from '@anthropic-ai/sdk/resources/messages.mjs'
 import dayjs from 'dayjs'
 import getUrls from 'get-urls'
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 
 import {
-  AiSummaryFormat,
-  getDailySummarySystemPrompt,
+  DAILY_SUMMARY_SYSTEM_PROMPT,
+  getDailySummaryUserPrompt,
 } from '@/prompts/summarize/daily-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
 import { UrlBodies } from '@/types/urls'
-import { anthropic, extractJson, openai } from '@/utils/ai'
+import { openai } from '@/utils/ai'
 import { formatCalendarEvents, getDaysEvents } from '@/utils/calendar'
 import { createOrUpdateFile, getRecentFiles } from '@/utils/github'
 import { redis } from '@/utils/redis'
@@ -52,39 +51,40 @@ export async function POST(req: NextRequest) {
     }))
   }
 
-  const response = await anthropic.messages.create({
+  const formatInputs = (inputs: { title: string; summary: string }[]) =>
+    inputs.map((i) => `- ${i.title}: ${i.summary}`).join('\n')
+
+  const notesString = `${notesArray ? formatInputs(notesArray) : ''}${
+    urlsArray ? `\n${formatInputs(urlsArray)}` : ''
+  }`.trim()
+
+  const response = await openai.chat.completions.create({
+    model: 'o3',
+    reasoning_effort: 'high',
     messages: [
+      { role: 'system', content: DAILY_SUMMARY_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: getDailySummarySystemPrompt({
-          notes: notesArray ?? null,
-          urls: urlsArray ?? null,
+        content: getDailySummaryUserPrompt({
+          date: dayjs(body.date).format('MMMM D, YYYY'),
+          notes: notesString,
         }),
       },
     ],
-    model: 'claude-3-5-sonnet-20240620',
-    max_tokens: 4000,
   })
 
-  if (!response) {
+  if (!response.choices[0].message.content) {
     return new Response('No content found in response', { status: 500 })
   }
-  const responseString = (response.content[0] as TextBlock).text
-  const filename = `${process.env.DAILY_SUMMARY_NAME} ${body.date}${process.env.NODE_ENV === 'development' ? `-DEV` : ''}.md`
-  const parsed = await (async () => {
-    try {
-      return AiSummaryFormat.parse(JSON.parse(responseString))
-    } catch (error) {
-      console.error('Error parsing response:', error)
-      return await extractJson(responseString, AiSummaryFormat)
-    }
-  })()
+  const responseString = response.choices[0].message.content
+  const filename = `${process.env.DAILY_SUMMARY_NAME} ${body.date}$
+    {process.env.NODE_ENV === 'development' ? `-DEV` : ''}.md`
   let eventsSection
   if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
     const events = await getDaysEvents()
     eventsSection = await formatCalendarEvents(events)
   }
-  let responseContent = `# Daily Summary for ${dayjs(body.date).format('MMMM D, YYYY')}\n${eventsSection ? `## Calendar\n${eventsSection}` : ''}## Overall Summary\n${parsed.overallSummary}\n## Interesting Ideas\n- ${parsed.interestingIdeas.join('\n- ')}\n## Common Themes\n${parsed.commonThemes.join('\n- ')}\n## Questions for Exploration\n- ${parsed.questionsForExploration.join('\n- ')}\n## Possible Next Steps\n- ${parsed.nextSteps.join('\n- ')}`
+  let responseContent = `# Daily Summary for ${dayjs(body.date).format('MMMM D, YYYY')}\n${eventsSection ? `## Calendar\n${eventsSection}\n` : ''}${responseString.trim()}`
 
   if (notes) {
     const insertNotes = (
@@ -161,7 +161,8 @@ export async function GET(req: NextRequest) {
     })
   })
   const openaiResponse = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'o3',
+    reasoning_effort: 'high',
     messages: [
       {
         role: 'system',

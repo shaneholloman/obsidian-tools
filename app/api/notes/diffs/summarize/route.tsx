@@ -1,9 +1,8 @@
-import { TextBlock } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { NextRequest } from 'next/server'
 
 import { getDiffSummarizationPrompt } from '@/prompts/notes/note-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
-import { anthropic } from '@/utils/ai'
+import { openai } from '@/utils/ai'
 import { redis } from '@/utils/redis'
 import { verifyUpstashSignature } from '@/utils/upstash'
 
@@ -12,10 +11,9 @@ export async function POST(req: NextRequest) {
 
   const body: RouteMessageMap['/api/notes/diffs/summarize'] =
     await verifyUpstashSignature(req)
-  const response = await anthropic.messages.create({
-    max_tokens: 1000,
-    model: 'claude-3-5-sonnet-20240620',
-
+  const response = await openai.chat.completions.create({
+    model: 'o3',
+    reasoning_effort: 'high',
     messages: [
       {
         role: 'user',
@@ -23,10 +21,10 @@ export async function POST(req: NextRequest) {
       },
     ],
   })
-  if (!response) {
+  if (!response.choices[0].message.content) {
     return new Response('No content found in response', { status: 500 })
   }
-  const responseContent = (response.content[0] as TextBlock).text
+  const responseContent = response.choices[0].message.content
   await redis.hset(body.keys.notesKey, {
     [body.diff.filename]: responseContent.trim(),
   })

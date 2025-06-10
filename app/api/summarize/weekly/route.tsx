@@ -1,15 +1,15 @@
-import { TextBlock } from '@anthropic-ai/sdk/resources/messages.mjs'
 import dayjs from 'dayjs'
 import timezonePlugin from 'dayjs/plugin/timezone'
 import utc from 'dayjs/plugin/utc'
 import { NextRequest } from 'next/server'
 
 import {
-  getWeeklySummarySystemPrompt,
-  WeeklySummaryFormat,
+  getWeeklySummaryUserPrompt,
+  WEEKLY_SUMMARY_SYSTEM_PROMPT,
 } from '@/prompts/summarize/weekly-summary-user'
+import { RecentFile } from '@/types/files'
 import { RouteMessageMap } from '@/types/upstash'
-import { anthropic, extractJson } from '@/utils/ai'
+import { openai } from '@/utils/ai'
 import { createOrUpdateFile, getDailySummaries } from '@/utils/github'
 import { publishToUpstash, verifyUpstashSignature } from '@/utils/upstash'
 export const dynamic = 'force-dynamic'
@@ -39,31 +39,36 @@ export async function POST(req: NextRequest) {
     process.env.GITHUB_REPO!,
   )
 
-  const response = await anthropic.messages.create({
-    max_tokens: 4000,
-    model: 'claude-3-5-sonnet-20240620',
+  const formatDailySummaries = (summaries: RecentFile[]) =>
+    summaries
+      .map(
+        (summary) =>
+          `### ${summary.filename.replace('.md', '')}\n\n${summary.body}`,
+      )
+      .join('\n\n')
+
+  const summariesString = formatDailySummaries(dailySummaries)
+
+  const response = await openai.chat.completions.create({
+    model: 'o3',
+    reasoning_effort: 'high',
     messages: [
+      { role: 'system', content: WEEKLY_SUMMARY_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: getWeeklySummarySystemPrompt({
-          dailySummaries,
-          weekEndDate: body.weekEndDate,
-          weekStartDate: body.weekStartDate,
+        content: getWeeklySummaryUserPrompt({
+          startDate: body.weekStartDate,
+          endDate: body.weekEndDate,
+          summaries: summariesString,
         }),
       },
     ],
   })
-  const responseText = (response.content[0] as TextBlock).text
-  const parsed = await (async () => {
-    try {
-      return WeeklySummaryFormat.parse(JSON.parse(responseText))
-    } catch (error) {
-      console.error('Error parsing response:', error)
-      console.log('Response:', responseText)
-      return await extractJson(responseText, WeeklySummaryFormat)
-    }
-  })()
-  const responseContent = `# Weekly Summary for ${body.weekStartDate} - ${body.weekEndDate}\n## Overall Summary\n${parsed.executiveSummary}\n## Strategic Implications\n- ${parsed.strategicInsights.join('\n- ')}\n## Challenges & Opportunities\n### Challenges\n- ${parsed.challengesAndOpportunities.challenges.join('\n- ')}\n### Opportunities\n- ${parsed.challengesAndOpportunities.opportunities.join('\n- ')}\n## Key Developments & Trends\n- ${parsed.keyDevelopmentsAndTrends.join('\n- ')}\n## Long Term Implications\n- ${parsed.longTermImplications.join('\n- ')}\n## Goals for Next Week\n- ${parsed.goalsForNextWeek.join('\n- ')}`
+
+  if (!response.choices[0].message.content) {
+    return new Response('No content found in response', { status: 500 })
+  }
+  const responseContent = `# Weekly Summary for ${body.weekStartDate} - ${body.weekEndDate}\n${response.choices[0].message.content.trim()}`
   const filename = `${process.env.WEEKLY_SUMMARY_NAME} ${dayjs().format('YYYY-MM-DD')}${process.env.NODE_ENV === 'development' ? `-DEV` : ''}.md`
 
   await createOrUpdateFile({

@@ -14,7 +14,8 @@ export async function processUrl(url: string, urlBodiesKey: string) {
     const body = await scrapeUrl(url) // Replace with your scraping function
     if (body?.body) {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'o3',
+        reasoning_effort: 'high',
         messages: [
           {
             role: 'user',

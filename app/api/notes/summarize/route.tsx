@@ -12,7 +12,8 @@ export async function POST(req: NextRequest) {
   const body: RouteMessageMap['/api/notes/summarize'] =
     await verifyUpstashSignature(req)
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-2024-08-06',
+    model: 'o3',
+    reasoning_effort: 'high',
     messages: [
       {
         role: 'user',
