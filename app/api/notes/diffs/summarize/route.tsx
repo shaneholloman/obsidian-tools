@@ -14,13 +14,10 @@ export async function POST(req: NextRequest) {
     await verifyUpstashSignature(req)
   const response = await anthropic.messages.create({
     max_tokens: 1000,
-    model: 'claude-3-5-sonnet-20240620',
+    model: 'claude-sonnet-4-20250514',
 
     messages: [
-      {
-        role: 'user',
-        content: getDiffSummarizationPrompt(body.diff.diff),
-      },
+      { role: 'user', content: getDiffSummarizationPrompt(body.diff.diff) },
     ],
   })
   if (!response) {
