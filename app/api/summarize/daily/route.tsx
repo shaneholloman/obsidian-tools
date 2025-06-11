@@ -59,8 +59,7 @@ export async function POST(req: NextRequest) {
   }`.trim()
 
   const response = await openai.chat.completions.create({
-    model: 'o3',
-    reasoning_effort: 'high',
+    model: 'gpt-4o-2024-08-06',
     messages: [
       { role: 'system', content: DAILY_SUMMARY_SYSTEM_PROMPT },
       {
@@ -77,8 +76,7 @@ export async function POST(req: NextRequest) {
     return new Response('No content found in response', { status: 500 })
   }
   const responseString = response.choices[0].message.content
-  const filename = `${process.env.DAILY_SUMMARY_NAME} ${body.date}$
-    {process.env.NODE_ENV === 'development' ? `-DEV` : ''}.md`
+  const filename = `${process.env.DAILY_SUMMARY_NAME} ${body.date}${process.env.NODE_ENV === 'development' ? '-DEV' : ''}.md`
   let eventsSection
   if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
     const events = await getDaysEvents()
@@ -161,8 +159,7 @@ export async function GET(req: NextRequest) {
     })
   })
   const openaiResponse = await openai.chat.completions.create({
-    model: 'o3',
-    reasoning_effort: 'high',
+    model: 'gpt-4o-2024-08-06',
     messages: [
       {
         role: 'system',
