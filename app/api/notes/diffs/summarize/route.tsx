@@ -1,3 +1,4 @@
+import { TextBlock } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { NextRequest } from 'next/server'
 
 import { getDiffSummarizationPrompt } from '@/prompts/notes/note-summary-user'
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!response.content) {
     return new Response('No content found in response', { status: 500 })
   }
-  const responseContent = response.choices[0].message.content
+  const responseContent = (response.content[0] as TextBlock).text
   await redis.hset(body.keys.notesKey, {
     [body.diff.filename]: responseContent.trim(),
   })
