@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: getDiffSummarizationPrompt(body.diff.diff) },
     ],
   })
-  if (!response) {
+  if (!response.content || !response.content[0]) {
     return new Response('No content found in response', { status: 500 })
   }
   const responseContent = (response.content[0] as TextBlock).text
