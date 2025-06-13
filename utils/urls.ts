@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { openai } from './ai'
+import { openai, O3_CONFIG } from './ai'
 import { redis } from './redis'
 import { scrapeUrl } from './scrape'
 
@@ -14,8 +14,7 @@ export async function processUrl(url: string, urlBodiesKey: string) {
     const body = await scrapeUrl(url) // Replace with your scraping function
     if (body?.body) {
       const response = await openai.chat.completions.create({
-        model: 'o3',
-        reasoning_effort: 'high',
+        ...O3_CONFIG,
         messages: [
           {
             role: 'user',
@@ -47,12 +46,12 @@ Do not include any explanation or additional text outside of this JSON object.`,
         ],
         response_format: { type: 'json_object' },
       })
-      if (!response) {
+      if (!response.choices[0]?.message?.content) {
         console.error(`Failed to summarize URL: ${url}`)
         throw new Error('Failed to summarize URL')
       }
       const urlSummary = urlResponse.parse(
-        JSON.parse(response.choices[0].message.content ?? ''),
+        JSON.parse(response.choices[0].message.content),
       )
       if (!urlSummary.skipUrl) {
         await redis.hset(urlBodiesKey, {

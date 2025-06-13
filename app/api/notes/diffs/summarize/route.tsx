@@ -3,9 +3,9 @@ import { NextRequest } from 'next/server'
 
 import { getDiffSummarizationPrompt } from '@/prompts/notes/note-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
+import { anthropic } from '@/utils/ai'
 import { redis } from '@/utils/redis'
 import { verifyUpstashSignature } from '@/utils/upstash'
-import { anthropic } from '@/utils/ai'
 
 export async function POST(req: NextRequest) {
   console.log('/api/notes/diffs/summarize')
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: getDiffSummarizationPrompt(body.diff.diff) },
     ],
   })
-  if (!response.content) {
+  if (!response.content || !response.content[0]) {
     return new Response('No content found in response', { status: 500 })
   }
   const responseContent = (response.content[0] as TextBlock).text

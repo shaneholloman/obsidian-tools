@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 
 import { getNoteSummarizationPrompt } from '@/prompts/notes/note-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
-import { openai } from '@/utils/ai'
+import { O3_CONFIG,openai } from '@/utils/ai'
 import { redis } from '@/utils/redis'
 import { verifyUpstashSignature } from '@/utils/upstash'
 export const maxDuration = 300
@@ -12,8 +12,7 @@ export async function POST(req: NextRequest) {
   const body: RouteMessageMap['/api/notes/summarize'] =
     await verifyUpstashSignature(req)
   const response = await openai.chat.completions.create({
-    model: 'o3',
-    reasoning_effort: 'high',
+    ...O3_CONFIG,
     messages: [
       {
         role: 'user',
@@ -32,7 +31,7 @@ export async function POST(req: NextRequest) {
   //       },
   //     ],
   //   })
-  if (!response || !response.choices[0].message.content) {
+  if (!response.choices[0]?.message?.content) {
     return new Response('No content found in response', { status: 500 })
   }
   //   const responseContent = (response.content[0] as TextBlock).text

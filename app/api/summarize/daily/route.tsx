@@ -9,7 +9,7 @@ import {
 } from '@/prompts/summarize/daily-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
 import { UrlBodies } from '@/types/urls'
-import { openai } from '@/utils/ai'
+import { O3_CONFIG, openai, validateMarkdownContent } from '@/utils/ai'
 import { formatCalendarEvents, getDaysEvents } from '@/utils/calendar'
 import { createOrUpdateFile, getRecentFiles } from '@/utils/github'
 import { redis } from '@/utils/redis'
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   }`.trim()
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-2024-08-06',
+    ...O3_CONFIG,
     messages: [
       { role: 'system', content: DAILY_SUMMARY_SYSTEM_PROMPT },
       {
@@ -72,10 +72,15 @@ export async function POST(req: NextRequest) {
     ],
   })
 
-  if (!response.choices[0].message.content) {
+  if (!response.choices[0]?.message?.content) {
     return new Response('No content found in response', { status: 500 })
   }
   const responseString = response.choices[0].message.content
+  
+  if (!validateMarkdownContent(responseString)) {
+    console.error('Invalid markdown content received from AI')
+    return new Response('Invalid content in AI response', { status: 500 })
+  }
   const filename = `${process.env.DAILY_SUMMARY_NAME} ${body.date}${process.env.NODE_ENV === 'development' ? '-DEV' : ''}.md`
   let eventsSection
   if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {

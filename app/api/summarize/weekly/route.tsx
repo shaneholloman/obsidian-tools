@@ -9,7 +9,7 @@ import {
 } from '@/prompts/summarize/weekly-summary-user'
 import { RecentFile } from '@/types/files'
 import { RouteMessageMap } from '@/types/upstash'
-import { openai } from '@/utils/ai'
+import { O3_CONFIG, openai, validateMarkdownContent } from '@/utils/ai'
 import { createOrUpdateFile, getDailySummaries } from '@/utils/github'
 import { publishToUpstash, verifyUpstashSignature } from '@/utils/upstash'
 export const dynamic = 'force-dynamic'
@@ -50,8 +50,7 @@ export async function POST(req: NextRequest) {
   const summariesString = formatDailySummaries(dailySummaries)
 
   const response = await openai.chat.completions.create({
-    model: 'o3',
-    reasoning_effort: 'high',
+    ...O3_CONFIG,
     messages: [
       { role: 'system', content: WEEKLY_SUMMARY_SYSTEM_PROMPT },
       {
@@ -65,10 +64,17 @@ export async function POST(req: NextRequest) {
     ],
   })
 
-  if (!response.choices[0].message.content) {
+  if (!response.choices[0]?.message?.content) {
     return new Response('No content found in response', { status: 500 })
   }
-  const responseContent = `# Weekly Summary for ${body.weekStartDate} - ${body.weekEndDate}\n${response.choices[0].message.content.trim()}`
+  
+  const aiContent = response.choices[0].message.content
+  if (!validateMarkdownContent(aiContent)) {
+    console.error('Invalid markdown content received from AI')
+    return new Response('Invalid content in AI response', { status: 500 })
+  }
+  
+  const responseContent = `# Weekly Summary for ${body.weekStartDate} - ${body.weekEndDate}\n${aiContent.trim()}`
   const filename = `${process.env.WEEKLY_SUMMARY_NAME} ${dayjs().format('YYYY-MM-DD')}${process.env.NODE_ENV === 'development' ? `-DEV` : ''}.md`
 
   await createOrUpdateFile({
