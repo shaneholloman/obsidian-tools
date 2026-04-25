@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-import { openai, O3_CONFIG } from './ai'
-import { redis } from './redis'
+import { getOpenAI, O3_CONFIG } from './ai'
+import { getRedis } from './redis'
 import { scrapeUrl } from './scrape'
 
 const urlResponse = z.object({
@@ -13,7 +13,7 @@ export async function processUrl(url: string, urlBodiesKey: string) {
   try {
     const body = await scrapeUrl(url) // Replace with your scraping function
     if (body?.body) {
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAI().chat.completions.create({
         ...O3_CONFIG,
         messages: [
           {
@@ -54,6 +54,7 @@ Do not include any explanation or additional text outside of this JSON object.`,
         JSON.parse(response.choices[0].message.content),
       )
       if (!urlSummary.skipUrl) {
+        const redis = getRedis()
         await redis.hset(urlBodiesKey, {
           [url.trim() as string]: {
             ...body,
@@ -63,7 +64,7 @@ Do not include any explanation or additional text outside of this JSON object.`,
         await redis.expire(urlBodiesKey, 86400) // Set TTL for 24 hours
       }
     }
-  } catch (error) {
+  } catch {
     // Handle failed scrape attempt
     console.error(`Failed to scrape URL: ${url}`)
     // URL is already removed from the list by lpop, no need to handle further

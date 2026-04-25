@@ -9,10 +9,10 @@ import {
 } from '@/prompts/summarize/daily-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
 import { UrlBodies } from '@/types/urls'
-import { O3_CONFIG, openai, validateMarkdownContent } from '@/utils/ai'
+import { getOpenAI, O3_CONFIG, validateMarkdownContent } from '@/utils/ai'
 import { formatCalendarEvents, getDaysEvents } from '@/utils/calendar'
 import { createOrUpdateFile, getRecentFiles } from '@/utils/github'
-import { redis } from '@/utils/redis'
+import { getRedis } from '@/utils/redis'
 import { getQueueKeys } from '@/utils/redis-queue'
 import { publishToUpstash, verifyUpstashSignature } from '@/utils/upstash'
 export const maxDuration = 300
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     await verifyUpstashSignature(req)
   console.log('/api/summarize/daily')
 
+  const redis = getRedis()
   const urlBodies: UrlBodies | null = await redis.hgetall(body.urlsKey)
   const notes: Record<string, string> | null = await redis.hgetall(
     body.notesKey,
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     urlsArray ? `\n${formatInputs(urlsArray)}` : ''
   }`.trim()
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     ...O3_CONFIG,
     messages: [
       { role: 'system', content: DAILY_SUMMARY_SYSTEM_PROMPT },
@@ -163,7 +164,7 @@ export async function GET(req: NextRequest) {
       urls.push(url)
     })
   })
-  const openaiResponse = await openai.chat.completions.create({
+  const openaiResponse = await getOpenAI().chat.completions.create({
     model: 'gpt-4o-2024-08-06',
     messages: [
       {

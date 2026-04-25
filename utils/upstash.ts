@@ -8,12 +8,9 @@ import { RouteMessageMap, UpstashRoute } from '@/types/upstash'
 const gzip = async (input: string): Promise<Buffer> => {
   return Buffer.from(pako.gzip(input))
 }
-const client = new Client({ token: process.env.QSTASH_TOKEN! })
+let client: Client | null = null
+let receiver: Receiver | null = null
 
-const r = new Receiver({
-  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
-  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
-})
 type UpstashHeaders = {
   'Content-Type': string
   'Authorization': string
@@ -23,9 +20,31 @@ type UpstashHeaders = {
   'Content-Encoding'?: string
   'Upstash-Forward-Delay-Applied'?: string
 }
-export const upstashHeaders: UpstashHeaders = {
-  'Authorization': `Bearer ${process.env.QSTASH_TOKEN}`,
-  'Content-Type': 'application/json',
+
+function getClient() {
+  if (!client) {
+    client = new Client({ token: process.env.QSTASH_TOKEN! })
+  }
+
+  return client
+}
+
+function getReceiver() {
+  if (!receiver) {
+    receiver = new Receiver({
+      currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
+      nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+    })
+  }
+
+  return receiver
+}
+
+function getUpstashHeaders(): UpstashHeaders {
+  return {
+    'Authorization': `Bearer ${process.env.QSTASH_TOKEN}`,
+    'Content-Type': 'application/json',
+  }
 }
 
 export async function verifyUpstashSignature(req: NextRequest) {
@@ -33,7 +52,7 @@ export async function verifyUpstashSignature(req: NextRequest) {
   const signature = req.headers.get('Upstash-Signature') ?? ''
   let isValid = false
   try {
-    isValid = await r.verify({ body, signature })
+    isValid = await getReceiver().verify({ body, signature })
     if (!isValid) {
       console.log('Invalid signature')
       throw new Error('Invalid signature')
@@ -46,7 +65,7 @@ export async function verifyUpstashSignature(req: NextRequest) {
 }
 
 export async function getUpstashQueue(queueName: string) {
-  const queue = client.queue({ queueName })
+  const queue = getClient().queue({ queueName })
   const queueInfo = await queue.get()
   return queueInfo
 }
@@ -66,7 +85,7 @@ export async function publishToUpstash<Route extends UpstashRoute>(
   console.log('URL: ', url)
   const urlPath = `https://${process.env.NEXT_PUBLIC_SITE_URL}${url}`
   if (options?.queue) {
-    const queue = client.queue({ queueName: options.queue })
+    const queue = getClient().queue({ queueName: options.queue })
     if (options.queueParallelism) {
       queue.upsert({ parallelism: options.queueParallelism })
     }
@@ -83,7 +102,7 @@ export async function publishToUpstash<Route extends UpstashRoute>(
     console.log('Absolute Delay: ', secondsFromNow)
   }
 
-  const headers: UpstashHeaders = upstashHeaders
+  const headers = getUpstashHeaders()
   if (options?.delay) {
     headers['Upstash-Delay'] = `${options.delay}s`
     console.log('Delay: ', options.delay)

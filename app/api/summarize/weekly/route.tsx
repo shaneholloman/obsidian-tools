@@ -9,7 +9,7 @@ import {
 } from '@/prompts/summarize/weekly-summary-user'
 import { RecentFile } from '@/types/files'
 import { RouteMessageMap } from '@/types/upstash'
-import { O3_CONFIG, openai, validateMarkdownContent } from '@/utils/ai'
+import { getOpenAI, O3_CONFIG, validateMarkdownContent } from '@/utils/ai'
 import { createOrUpdateFile, getDailySummaries } from '@/utils/github'
 import { publishToUpstash, verifyUpstashSignature } from '@/utils/upstash'
 export const dynamic = 'force-dynamic'
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   const summariesString = formatDailySummaries(dailySummaries)
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     ...O3_CONFIG,
     messages: [
       { role: 'system', content: WEEKLY_SUMMARY_SYSTEM_PROMPT },
