@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server'
 
 import { getNoteSummarizationPrompt } from '@/prompts/notes/note-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
-import { O3_CONFIG,openai } from '@/utils/ai'
-import { redis } from '@/utils/redis'
+import { getOpenAI, O3_CONFIG } from '@/utils/ai'
+import { getRedis } from '@/utils/redis'
 import { verifyUpstashSignature } from '@/utils/upstash'
 export const maxDuration = 300
 
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   console.log('POST /api/notes/summarize')
   const body: RouteMessageMap['/api/notes/summarize'] =
     await verifyUpstashSignature(req)
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     ...O3_CONFIG,
     messages: [
       {
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   }
   //   const responseContent = (response.content[0] as TextBlock).text
   const responseContent = response.choices[0].message.content
+  const redis = getRedis()
   await redis.hset(body.keys.notesKey, {
     [body.note.filename]: responseContent.trim(),
   })

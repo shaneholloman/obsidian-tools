@@ -3,8 +3,8 @@ import { NextRequest } from 'next/server'
 
 import { getDiffSummarizationPrompt } from '@/prompts/notes/note-summary-user'
 import { RouteMessageMap } from '@/types/upstash'
-import { anthropic } from '@/utils/ai'
-import { redis } from '@/utils/redis'
+import { getAnthropic } from '@/utils/ai'
+import { getRedis } from '@/utils/redis'
 import { verifyUpstashSignature } from '@/utils/upstash'
 
 export async function POST(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   const body: RouteMessageMap['/api/notes/diffs/summarize'] =
     await verifyUpstashSignature(req)
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     max_tokens: 1000,
     model: 'claude-sonnet-4-20250514',
 
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     return new Response('No content found in response', { status: 500 })
   }
   const responseContent = (response.content[0] as TextBlock).text
+  const redis = getRedis()
   await redis.hset(body.keys.notesKey, {
     [body.diff.filename]: responseContent.trim(),
   })

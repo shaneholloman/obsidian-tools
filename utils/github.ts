@@ -2,6 +2,17 @@ import dayjs from 'dayjs'
 import { Octokit } from 'octokit'
 
 import { RecentDiff, RecentFile } from '@/types/files'
+
+let octokit: Octokit | null = null
+
+function getOctokit() {
+  if (!octokit) {
+    octokit = new Octokit({ auth: process.env.GITHUB_ACCESS_TOKEN })
+  }
+
+  return octokit
+}
+
 const EXCLUDED_TERMS: string[] = []
 if (process.env.DAILY_SUMMARY_NAME) {
   EXCLUDED_TERMS.push(process.env.DAILY_SUMMARY_NAME)
@@ -12,8 +23,6 @@ if (process.env.WEEKLY_SUMMARY_NAME) {
 if (process.env.MONTHLY_SUMMARY_NAME) {
   EXCLUDED_TERMS.push(process.env.MONTHLY_SUMMARY_NAME)
 }
-export const octokit = new Octokit({ auth: process.env.GITHUB_ACCESS_TOKEN })
-
 function btoa(str: string) {
   return Buffer.from(str).toString('base64')
 }
@@ -116,6 +125,7 @@ export async function createOrUpdateFile({
 
 async function getOriginalCreationDate(filename: string): Promise<Date | null> {
   try {
+    const octokit = getOctokit()
     let currentFilename = filename
     let earliestDate: Date | null = null
     let continueSearch = true
@@ -176,6 +186,7 @@ export async function getRecentFiles(
   owner: string,
   repo: string,
 ): Promise<{ files: RecentFile[]; diffs: RecentDiff[] }> {
+  const octokit = getOctokit()
   const twentyFourHoursAgo = new Date(
     Date.now() - 24 * 60 * 60 * 1000,
   ).toISOString()
@@ -304,6 +315,7 @@ export async function getDailySummaries(
   owner: string,
   repo: string,
 ): Promise<RecentFile[]> {
+  const octokit = getOctokit()
   const today = dayjs().startOf('day')
   const dailySummaryName = process.env.DAILY_SUMMARY_NAME || 'Daily Summary'
   const summaries: RecentFile[] = []

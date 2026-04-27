@@ -3,13 +3,29 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { z, ZodType } from 'zod'
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+let anthropic: Anthropic | null = null
+let openai: OpenAI | null = null
 
-export const openai = new OpenAI({
-  organization: process.env.OPENAI_ORGANIZATION_ID,
-})
+export function getAnthropic() {
+  if (!anthropic) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+
+  return anthropic
+}
+
+export function getOpenAI() {
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      organization: process.env.OPENAI_ORGANIZATION_ID,
+    })
+  }
+
+  return openai
+}
 
 export const O3_CONFIG = {
   model: 'o3',
@@ -53,7 +69,7 @@ export async function extractJson<T extends ZodType>(
   string: string,
   zodType: T,
 ): Promise<z.infer<T>> {
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     ...O3_CONFIG,
     messages: [
       {
